@@ -8,10 +8,10 @@ on:
 
 jobs:
   build:
-    runs-on: nv-palladium
+    runs-on: self-hosted
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
 
     - name: Verify Zig installation
       run: zig version
