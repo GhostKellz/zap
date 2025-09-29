@@ -4,6 +4,11 @@
 
 ## ⚡ zap
 
+[![Built with Zig](https://img.shields.io/badge/Built%20with-Zig-F7A41D?style=flat&logo=zig&logoColor=white)](https://ziglang.org)
+[![Zig Version](https://img.shields.io/badge/Zig-0.16.0--dev-orange?style=flat)](https://ziglang.org/download/)
+[![AI Powered](https://img.shields.io/badge/AI-Powered-blueviolet?style=flat)](https://github.com/ghostkellz/zap)
+[![CI](https://img.shields.io/github/actions/workflow/status/ghostkellz/zap/ci.yml?branch=main&label=CI&style=flat)](https://github.com/ghostkellz/zap/actions/workflows/ci.yml)
+
 **AI-Powered Git Workflow Reimagined**
 
 Zap is a next-generation interface for Git that keeps full compatibility with `.git/`,  
