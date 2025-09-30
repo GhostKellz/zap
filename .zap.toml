@@ -1,0 +1,19 @@
+[zap]
+ai_enabled = true
+remember_patterns = true
+max_patterns = 50
+
+[ollama]
+host = "http://localhost:11434"
+model = "deepseek-coder:33b"
+timeout_ms = 30000
+
+[style]
+type_scope_required = true
+imperative = true
+max_subject_len = 72
+
+[policies]
+allow_cloud = false
+block_secrets = true
+require_tests_on = ["feat", "fix", "refactor"]

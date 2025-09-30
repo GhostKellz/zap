@@ -39,6 +39,9 @@ pub fn build(b: *std.Build) void {
         // Later on we'll use this module as the root module of a test executable
         // which requires us to specify a target.
         .target = target,
+        .imports = &.{
+            // No imports needed for root module
+        },
     });
 
     // Here we define an executable. An executable needs to have a root module
@@ -79,6 +82,9 @@ pub fn build(b: *std.Build) void {
                 // can be extremely useful in case of collisions (which can happen
                 // importing modules from different packages).
                 .{ .name = "zap", .module = mod },
+                .{ .name = "flash", .module = b.dependency("flash", .{}).module("flash") },
+                .{ .name = "flare", .module = b.dependency("flare", .{}).module("flare") },
+                .{ .name = "rune", .module = b.dependency("rune", .{}).module("rune") },
             },
         }),
     });

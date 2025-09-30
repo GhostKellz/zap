@@ -1,0 +1,2 @@
+{"model":"deepseek-coder:33b","prompt":"Write a concise git commit message for these changes: Added .toml, .zig, .zig, .zig, .zig; Modified , .zig, .zon, .zig, .zig
+Follow conventional commit format. Keep under 72 characters.","stream":false,"options":{"num_predict":100,"temperature":0.30000001192092896}}
