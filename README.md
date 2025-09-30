@@ -134,3 +134,4 @@ Stores embeddings and previous answers in zQLite for instant re-use.
 ## 📜 License
 
 MIT © 2025 CK Technology LLC / GhostKellz
+# Test change
