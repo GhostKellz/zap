@@ -17,13 +17,13 @@ pub const CommitPattern = struct {
 /// Memory storage for commit patterns
 pub const CommitMemory = struct {
     allocator: std.mem.Allocator,
-    patterns: std.ArrayList(CommitPattern),
+    patterns: std.ArrayListUnmanaged(CommitPattern),
     max_patterns: usize = 100, // Limit to prevent unbounded growth
 
     pub fn init(allocator: std.mem.Allocator) CommitMemory {
         return CommitMemory{
             .allocator = allocator,
-            .patterns = std.ArrayList(CommitPattern).init(allocator),
+            .patterns = std.ArrayListUnmanaged(CommitPattern){},
         };
     }
 
@@ -33,7 +33,7 @@ pub const CommitMemory = struct {
             self.allocator.free(pattern.commit_message);
             self.allocator.free(pattern.file_types);
         }
-        self.patterns.deinit();
+        self.patterns.deinit(self.allocator);
     }
 
     /// Add a new commit pattern to memory
@@ -52,7 +52,7 @@ pub const CommitMemory = struct {
             .file_types = file_types_copy,
         };
 
-        try self.patterns.append(new_pattern);
+        try self.patterns.append(self.allocator, new_pattern);
 
         // Keep only the most recent patterns
         if (self.patterns.items.len > self.max_patterns) {
@@ -65,8 +65,8 @@ pub const CommitMemory = struct {
 
     /// Find similar patterns for a given AI assistant and file types
     pub fn findSimilarPatterns(self: *CommitMemory, ai_assistant: ai_detect.AIAssistant, file_types: []const []const u8) ![]CommitPattern {
-        var similar = std.ArrayList(CommitPattern).init(self.allocator);
-        defer similar.deinit();
+        var similar = std.ArrayListUnmanaged(CommitPattern){};
+        defer similar.deinit(self.allocator);
 
         for (self.patterns.items) |pattern| {
             if (pattern.ai_assistant == ai_assistant) {
@@ -83,12 +83,12 @@ pub const CommitMemory = struct {
 
                 // If we have some overlap or no specific file types, consider it similar
                 if (overlap_count > 0 or file_types.len == 0) {
-                    try similar.append(pattern);
+                    try similar.append(self.allocator, pattern);
                 }
             }
         }
 
-        return similar.toOwnedSlice();
+        return similar.toOwnedSlice(self.allocator);
     }
 
     /// Get the best pattern for a given context
@@ -112,15 +112,15 @@ pub const CommitMemory = struct {
     /// Suggest staging pattern based on AI assistant and current files
     pub fn suggestStagingPattern(self: *CommitMemory, ai_assistant: ai_detect.AIAssistant, staged_files: []const []const u8) !?[]const u8 {
         // Extract file types from staged files
-        var file_types = std.ArrayList([]const u8).init(self.allocator);
-        defer file_types.deinit();
+        var file_types = std.ArrayListUnmanaged([]const u8){};
+        defer file_types.deinit(self.allocator);
 
         for (staged_files) |file| {
             if (std.fs.path.extension(file).len > 0) {
                 const ext = std.fs.path.extension(file);
-                try file_types.append(ext);
+                try file_types.append(self.allocator, ext);
             } else {
-                try file_types.append("no-ext");
+                try file_types.append(self.allocator, "no-ext");
             }
         }
 
@@ -137,56 +137,36 @@ pub const CommitMemory = struct {
 
     /// Load patterns from disk storage
     pub fn loadFromDisk(self: *CommitMemory, zap_dir: []const u8) !void {
-        const patterns_file = try std.fs.path.join(self.allocator, &[_][]const u8{ zap_dir, "commit_patterns.json" });
-        defer self.allocator.free(patterns_file);
-
-        const file = std.fs.openFileAbsolute(patterns_file, .{}) catch |err| {
-            if (err == error.FileNotFound) return; // No existing patterns
-            return err;
-        };
-        defer file.close();
-
-        const content = try file.readToEndAlloc(self.allocator, 1024 * 1024); // 1MB limit
-        defer self.allocator.free(content);
-
-        // TODO: Parse JSON and load patterns
-        // For now, this is a placeholder
+        _ = self;
+        _ = zap_dir;
+        // TODO: Implement JSON loading
+        // For now, patterns are only stored in memory
     }
 
     /// Save patterns to disk storage
     pub fn saveToDisk(self: *CommitMemory, zap_dir: []const u8) !void {
-        const patterns_file = try std.fs.path.join(self.allocator, &[_][]const u8{ zap_dir, "commit_patterns.json" });
-        defer self.allocator.free(patterns_file);
-
-        // Ensure .zap directory exists
-        std.fs.makeDirAbsolute(zap_dir) catch |err| {
-            if (err != error.PathAlreadyExists) return err;
-        };
-
-        const file = try std.fs.createFileAbsolute(patterns_file, .{});
-        defer file.close();
-
-        // TODO: Serialize patterns to JSON
-        // For now, write a placeholder
-        try file.writeAll("{\"patterns\": []}\n");
+        _ = self;
+        _ = zap_dir;
+        // TODO: Implement JSON saving
+        // For now, patterns are only stored in memory
     }
 };
 
 /// Extract file types from a list of file paths
 pub fn extractFileTypes(allocator: std.mem.Allocator, files: []const []const u8) ![]const []const u8 {
-    var types = std.ArrayList([]const u8).init(allocator);
-    defer types.deinit();
+    var types = std.ArrayListUnmanaged([]const u8){};
+    defer types.deinit(allocator);
 
     for (files) |file| {
         const ext = std.fs.path.extension(file);
         if (ext.len > 0) {
-            try types.append(ext);
+            try types.append(allocator, ext);
         } else {
-            try types.append("no-ext");
+            try types.append(allocator, "no-ext");
         }
     }
 
-    return types.toOwnedSlice();
+    return types.toOwnedSlice(allocator);
 }
 
 test "commit pattern memory" {

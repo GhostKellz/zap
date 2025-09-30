@@ -87,6 +87,21 @@ zap changelog v0.7.2..HEAD
 Create a `.zap.toml` in your repo:
 
 ```toml
+[zap]
+ai_enabled = true
+remember_patterns = true
+
+[ollama]
+host = "http://localhost:11434"
+model = "deepseek-coder:33b"
+timeout_ms = 30000
+
+[ollama.models]
+commit = "deepseek-coder:33b"      # For commit message generation
+explain = "llama3:8b"              # For code explanation
+review = "deepseek-coder:33b"      # For code review
+merge = "codellama:34b"            # For merge conflict assistance
+
 [style]
 type_scope_required = true
 imperative = true
