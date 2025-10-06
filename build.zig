@@ -44,6 +44,17 @@ pub fn build(b: *std.Build) void {
         },
     });
 
+    // C API library for FFI (Ghostlang, other languages)
+    // For now, just make it available as a module
+    // Users can create their own lib if needed
+    _ = b.addModule("zap-c", .{
+        .root_source_file = b.path("src/c_api.zig"),
+        .target = target,
+        .imports = &.{
+            .{ .name = "zap", .module = mod },
+        },
+    });
+
     // Here we define an executable. An executable needs to have a root module
     // which needs to expose a `main` function. While we could add a main function
     // to the module defined above, it's sometimes preferable to split business
