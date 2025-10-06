@@ -33,8 +33,8 @@
     // internet connectivity.
     .dependencies = .{
         .flash = .{
-            .url = "https://github.com/ghostkellz/flash/archive/refs/heads/main.tar.gz",
-            .hash = "flash-0.2.4-dnj73-p7BQAfNq4cL_oklPQOaNDwVih2JNa4t4dVtJ-K",
+            .url = "https://github.com/ghostkellz/flash/archive/main.tar.gz",
+            .hash = "flash-0.3.1-dnj737-SBQDjkdsw5XOgIVxcWN0ZyJaDiXpUaoP7AcZ4",
         },
         .flare = .{
             .url = "https://github.com/ghostkellz/flare/archive/refs/heads/main.tar.gz",
