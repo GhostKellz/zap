@@ -34,23 +34,23 @@
     .dependencies = .{
         .flash = .{
             .url = "https://github.com/ghostkellz/flash/archive/main.tar.gz",
-            .hash = "flash-0.3.1-dnj737-SBQDjkdsw5XOgIVxcWN0ZyJaDiXpUaoP7AcZ4",
+            .hash = "flash-0.3.1-dnj737SSBQAnX4GpVwD40dpKdGzuBwgIygbH5cDVqc_W",
         },
         .flare = .{
             .url = "https://github.com/ghostkellz/flare/archive/main.tar.gz",
             .hash = "flare-0.1.0-NK4JafGMAQA8xE2ah8YBxO74sOkWrsQYTkWQ64D1PJVg",
         },
         .zsync = .{
-            .url = "https://github.com/ghostkellz/zsync/archive/refs/heads/main.tar.gz",
-            .hash = "zsync-0.5.4-KAuheZ4THQAlN32uBKm76ezT7dPT6rvj4ll56NiA9z9M",
+            .url = "https://github.com/ghostkellz/zsync/archive/main.tar.gz",
+            .hash = "zsync-0.6.0-KAuheSdEIADMlFewFMVPdUYTc0wbMHf_j-OTiQdKSHew",
         },
         .phantom = .{
             .url = "https://github.com/ghostkellz/phantom/archive/main.tar.gz",
-            .hash = "phantom-0.5.0-E0eWBBcxEgBL64hlBvhWs5mNWAkruSyJ_kSR5xTBsWM_",
+            .hash = "phantom-0.5.0-E0eWBAExEgDRtfXJ_QguR2k_lPztdeqobSVyAj_hPKPw",
         },
         .rune = .{
-            .url = "https://github.com/ghostkellz/rune/archive/refs/heads/main.tar.gz",
-            .hash = "rune-0.0.0-MvDOXuS-BACvzNqxZqYb3xuET2nxtzOsDyzQENdWIRzE",
+            .url = "https://github.com/ghostkellz/rune/archive/main.tar.gz",
+            .hash = "rune-0.1.0-MvDOXhN8BgAcU-z6vyPtQJyVpp2QnKiYcxEKsRxKTbQg",
         },
     },
     .paths = .{
