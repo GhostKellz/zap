@@ -178,7 +178,10 @@ test "commit pattern memory" {
         .staging_pattern = "staged all .zig files together",
         .commit_message = "feat: add new functionality",
         .success_score = 0.9,
-        .timestamp = std.time.timestamp(),
+        .timestamp = blk: {
+            const ts = std.posix.clock_gettime(std.posix.CLOCK.REALTIME) catch break :blk 0;
+            break :blk ts.sec;
+        },
         .file_types = &[_][]const u8{ ".zig", ".md" },
     };
 
@@ -198,7 +201,10 @@ test "find similar patterns" {
         .staging_pattern = "staged .zig and .md files",
         .commit_message = "docs: update README",
         .success_score = 0.8,
-        .timestamp = std.time.timestamp(),
+        .timestamp = blk: {
+            const ts = std.posix.clock_gettime(std.posix.CLOCK.REALTIME) catch break :blk 0;
+            break :blk ts.sec;
+        },
         .file_types = &[_][]const u8{ ".zig", ".md" },
     };
     try memory.rememberPattern(pattern);

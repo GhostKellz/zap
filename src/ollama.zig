@@ -239,7 +239,11 @@ pub const OllamaClient = struct {
         defer self.allocator.free(json_payload);
 
         // Create temporary file for payload
-        const temp_file = try std.fmt.allocPrint(self.allocator, "/tmp/zap_ollama_payload_{d}.json", .{std.time.timestamp()});
+        const ts = std.posix.clock_gettime(std.posix.CLOCK.REALTIME) catch |err| blk: {
+            std.log.warn("Failed to get timestamp: {}", .{err});
+            break :blk std.posix.timespec{ .sec = 0, .nsec = 0 };
+        };
+        const temp_file = try std.fmt.allocPrint(self.allocator, "/tmp/zap_ollama_payload_{d}.json", .{ts.sec});
         defer self.allocator.free(temp_file);
 
         var tmp_file = try std.fs.createFileAbsolute(temp_file, .{ .truncate = true });

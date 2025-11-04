@@ -375,7 +375,10 @@ fn handleCommit(ctx: flash.Context) (error{ AllocationError, AmbiguousCommand, A
             }),
             .commit_message = try allocator.dupe(u8, trimmed_message),
             .success_score = 0.9, // High score for successful commits
-            .timestamp = std.time.timestamp(),
+            .timestamp = blk: {
+                const ts = std.posix.clock_gettime(std.posix.CLOCK.REALTIME) catch break :blk 0;
+                break :blk ts.sec;
+            },
             .file_types = file_types,
         };
         defer allocator.free(pattern.staging_pattern);
