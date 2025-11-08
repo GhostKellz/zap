@@ -46,7 +46,7 @@
         },
         .phantom = .{
             .url = "https://github.com/ghostkellz/phantom/archive/main.tar.gz",
-            .hash = "phantom-0.7.1-E0eWBDWcFgANh9ISYUokz6XnF5G4LEFzaOF3dYsnC6Fx",
+            .hash = "phantom-0.7.3-E0eWBI0rHgCE_YAjKeZidzRVXeoLk5rIE8ORgFNNYGYG",
         },
         .rune = .{
             .url = "https://github.com/ghostkellz/rune/archive/main.tar.gz",
