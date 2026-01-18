@@ -36,7 +36,7 @@ fn selectModelForTask(config: *const flare.Config, task_type: TaskType) []const 
            @constCast(config).getString("ollama.model", "deepseek-coder:33b") catch "deepseek-coder:33b";
 }
 
-pub fn main() !void {
+pub fn main(init: std.process.Init) !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer _ = gpa.deinit();
     const allocator = gpa.allocator();
@@ -111,7 +111,7 @@ pub fn main() !void {
     var app = CLI.init(allocator, root_config);
 
     // Run the CLI
-    try app.run();
+    try app.runWithInit(init);
 }
 
 fn loadConfig(allocator: std.mem.Allocator) anyerror!flare.Config {
@@ -189,8 +189,8 @@ fn handleCommit(ctx: flash.Context) (error{ AllocationError, AmbiguousCommand, A
     // Stage all changes if --all flag is used
     if (stage_all) {
         std.debug.print("  📦 Staging all changes...\n", .{});
-        const add_result = std.process.Child.run(.{
-            .allocator = allocator,
+        const io = std.Io.Threaded.global_single_threaded.io();
+        const add_result = std.process.run(allocator, io, .{
             .argv = &[_][]const u8{ "git", "add", "." },
         }) catch |err| {
             std.debug.print("  ❌ Failed to stage changes: {}\n", .{err});
@@ -199,15 +199,15 @@ fn handleCommit(ctx: flash.Context) (error{ AllocationError, AmbiguousCommand, A
         defer allocator.free(add_result.stdout);
         defer allocator.free(add_result.stderr);
 
-        if (add_result.term != .Exited or add_result.term.Exited != 0) {
+        if (add_result.term != .exited or add_result.term.exited != 0) {
             std.debug.print("  ❌ Failed to stage changes: {s}\n", .{add_result.stderr});
             return;
         }
     }
 
     // Get git diff
-    const diff_result = std.process.Child.run(.{
-        .allocator = allocator,
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const diff_result = std.process.run(allocator, io, .{
         .argv = &[_][]const u8{ "git", "diff", "--cached" },
     }) catch |err| {
         std.debug.print("  ❌ Failed to get git diff: {}\n", .{err});
@@ -216,7 +216,7 @@ fn handleCommit(ctx: flash.Context) (error{ AllocationError, AmbiguousCommand, A
     defer allocator.free(diff_result.stdout);
     defer allocator.free(diff_result.stderr);
 
-    if (diff_result.term != .Exited or diff_result.term.Exited != 0) {
+    if (diff_result.term != .exited or diff_result.term.exited != 0) {
         std.debug.print("  ❌ No staged changes found\n", .{});
         std.debug.print("    Stage your changes first: git add .\n", .{});
         return;
@@ -227,8 +227,7 @@ fn handleCommit(ctx: flash.Context) (error{ AllocationError, AmbiguousCommand, A
         std.debug.print("  ❌ No staged changes found\n", .{});
 
         // Check for unstaged changes and suggest staging patterns
-        const status_result = std.process.Child.run(.{
-            .allocator = allocator,
+        const status_result = std.process.run(allocator, io, .{
             .argv = &[_][]const u8{ "git", "status", "--porcelain" },
         }) catch |err| {
             std.debug.print("    Could not check for unstaged changes: {}\n", .{err});
@@ -268,7 +267,7 @@ fn handleCommit(ctx: flash.Context) (error{ AllocationError, AmbiguousCommand, A
                 var commit_mem = commit_memory.CommitMemory.init(allocator);
                 defer commit_mem.deinit();
 
-                const home_dir = std.process.getEnvVarOwned(allocator, "HOME") catch "/tmp";
+                const home_dir = if (std.c.getenv("HOME")) |h| std.mem.sliceTo(h, 0) else "/tmp";
                 const zap_dir = try std.fs.path.join(allocator, &[_][]const u8{ home_dir, ".zap" });
                 defer allocator.free(zap_dir);
 
@@ -310,8 +309,7 @@ fn handleCommit(ctx: flash.Context) (error{ AllocationError, AmbiguousCommand, A
     std.debug.print("  🚀 Committing changes...\n", .{});
 
     // Perform the actual git commit
-    const commit_result = std.process.Child.run(.{
-        .allocator = allocator,
+    const commit_result = std.process.run(allocator, io, .{
         .argv = &[_][]const u8{ "git", "commit", "-m", trimmed_message },
     }) catch |err| {
         std.debug.print("  ❌ Failed to commit: {}\n", .{err});
@@ -320,7 +318,7 @@ fn handleCommit(ctx: flash.Context) (error{ AllocationError, AmbiguousCommand, A
     defer allocator.free(commit_result.stdout);
     defer allocator.free(commit_result.stderr);
 
-    if (commit_result.term != .Exited or commit_result.term.Exited != 0) {
+    if (commit_result.term != .exited or commit_result.term.exited != 0) {
         std.debug.print("  ❌ Commit failed: {s}\n", .{commit_result.stderr});
         return;
     }
@@ -336,8 +334,7 @@ fn handleCommit(ctx: flash.Context) (error{ AllocationError, AmbiguousCommand, A
         const ai_detection = zap.ai_detect.detectFromCommitMessage(trimmed_message);
 
         // Extract file types from staged files (we need to get them again)
-        const staged_files_result = std.process.Child.run(.{
-            .allocator = allocator,
+        const staged_files_result = std.process.run(allocator, io, .{
             .argv = &[_][]const u8{ "git", "diff", "--cached", "--name-only" },
         }) catch {
             std.debug.print("  ⚠️  Could not extract file types for pattern learning\n", .{});
@@ -389,9 +386,8 @@ fn handleCommit(ctx: flash.Context) (error{ AllocationError, AmbiguousCommand, A
         defer commit_mem.deinit();
 
         // Load existing patterns
-        const home_dir = std.process.getEnvVarOwned(allocator, "HOME") catch "/tmp";
+        const home_dir = if (std.c.getenv("HOME")) |h| std.mem.sliceTo(h, 0) else "/tmp";
         const zap_dir = try std.fs.path.join(allocator, &[_][]const u8{ home_dir, ".zap" });
-        defer allocator.free(home_dir);
         defer allocator.free(zap_dir);
 
         commit_mem.loadFromDisk(zap_dir) catch |err| {
@@ -471,8 +467,8 @@ fn handleExplain(ctx: flash.Context) (error{ AllocationError, AmbiguousCommand, 
     const git_cmd = try std.fmt.allocPrint(allocator, "git log --oneline --no-merges {s}", .{commit_range});
     defer allocator.free(git_cmd);
 
-    const log_result = std.process.Child.run(.{
-        .allocator = allocator,
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const log_result = std.process.run(allocator, io, .{
         .argv = &[_][]const u8{ "sh", "-c", git_cmd },
     }) catch |err| {
         std.debug.print("  ❌ Failed to get git log: {}\n", .{err});
@@ -481,7 +477,7 @@ fn handleExplain(ctx: flash.Context) (error{ AllocationError, AmbiguousCommand, 
     defer allocator.free(log_result.stdout);
     defer allocator.free(log_result.stderr);
 
-    if (log_result.term != .Exited or log_result.term.Exited != 0) {
+    if (log_result.term != .exited or log_result.term.exited != 0) {
         std.debug.print("  ❌ No commits found in range {s}\n", .{commit_range});
         return;
     }
@@ -496,8 +492,7 @@ fn handleExplain(ctx: flash.Context) (error{ AllocationError, AmbiguousCommand, 
     const diff_cmd = try std.fmt.allocPrint(allocator, "git diff {s}", .{commit_range});
     defer allocator.free(diff_cmd);
 
-    const diff_result = std.process.Child.run(.{
-        .allocator = allocator,
+    const diff_result = std.process.run(allocator, io, .{
         .argv = &[_][]const u8{ "sh", "-c", diff_cmd },
     }) catch |err| {
         std.debug.print("  ❌ Failed to get git diff: {}\n", .{err});
@@ -568,8 +563,8 @@ fn handleChangelog(ctx: flash.Context) (error{ AllocationError, AmbiguousCommand
     , .{version_range});
     defer allocator.free(git_cmd);
 
-    const log_result = std.process.Child.run(.{
-        .allocator = allocator,
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const log_result = std.process.run(allocator, io, .{
         .argv = &[_][]const u8{ "sh", "-c", git_cmd },
     }) catch |err| {
         std.debug.print("  ❌ Failed to get git log: {}\n", .{err});
@@ -578,7 +573,7 @@ fn handleChangelog(ctx: flash.Context) (error{ AllocationError, AmbiguousCommand
     defer allocator.free(log_result.stdout);
     defer allocator.free(log_result.stderr);
 
-    if (log_result.term != .Exited or log_result.term.Exited != 0) {
+    if (log_result.term != .exited or log_result.term.exited != 0) {
         std.debug.print("  ❌ No conventional commits found in range {s}\n", .{version_range});
         std.debug.print("    Try a different range or ensure commits follow conventional format\n", .{});
         return;
@@ -676,8 +671,8 @@ fn handleMerge(ctx: flash.Context) (error{ AllocationError, AmbiguousCommand, As
     const allocator = gpa.allocator();
 
     // Check if we're in a merge state
-    const merge_head_result = std.process.Child.run(.{
-        .allocator = allocator,
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const merge_head_result = std.process.run(allocator, io, .{
         .argv = &[_][]const u8{ "git", "rev-parse", "--verify", "MERGE_HEAD" },
     }) catch |err| {
         std.debug.print("  ❌ Failed to check merge state: {}\n", .{err});
@@ -686,7 +681,7 @@ fn handleMerge(ctx: flash.Context) (error{ AllocationError, AmbiguousCommand, As
     defer allocator.free(merge_head_result.stdout);
     defer allocator.free(merge_head_result.stderr);
 
-    const in_merge = merge_head_result.term == .Exited and merge_head_result.term.Exited == 0;
+    const in_merge = merge_head_result.term == .exited and merge_head_result.term.exited == 0;
 
     if (!in_merge) {
         std.debug.print("  ℹ️  No active merge in progress\n", .{});
@@ -697,8 +692,7 @@ fn handleMerge(ctx: flash.Context) (error{ AllocationError, AmbiguousCommand, As
     std.debug.print("  🔍 Detecting conflicts...\n", .{});
 
     // Get status to find conflicted files
-    const status_result = std.process.Child.run(.{
-        .allocator = allocator,
+    const status_result = std.process.run(allocator, io, .{
         .argv = &[_][]const u8{ "git", "status", "--porcelain" },
     }) catch |err| {
         std.debug.print("  ❌ Failed to get git status: {}\n", .{err});
@@ -707,7 +701,7 @@ fn handleMerge(ctx: flash.Context) (error{ AllocationError, AmbiguousCommand, As
     defer allocator.free(status_result.stdout);
     defer allocator.free(status_result.stderr);
 
-    if (status_result.term != .Exited or status_result.term.Exited != 0) {
+    if (status_result.term != .exited or status_result.term.exited != 0) {
         std.debug.print("  ❌ Failed to get git status\n", .{});
         return;
     }
@@ -800,8 +794,7 @@ fn handleMerge(ctx: flash.Context) (error{ AllocationError, AmbiguousCommand, As
         , .{first_file});
         defer allocator.free(show_cmd);
 
-        const show_result = std.process.Child.run(.{
-            .allocator = allocator,
+        const show_result = std.process.run(allocator, io, .{
             .argv = &[_][]const u8{ "sh", "-c", show_cmd },
         }) catch |err| {
             std.debug.print("  ❌ Failed to get file content: {}\n", .{err});
@@ -834,8 +827,7 @@ fn handleMerge(ctx: flash.Context) (error{ AllocationError, AmbiguousCommand, As
         , .{first_file});
         defer allocator.free(diff_cmd);
 
-        const diff_result = std.process.Child.run(.{
-            .allocator = allocator,
+        const diff_result = std.process.run(allocator, io, .{
             .argv = &[_][]const u8{ "sh", "-c", diff_cmd },
         }) catch |err| {
             std.debug.print("  ❌ Failed to get diff: {}\n", .{err});
@@ -918,8 +910,8 @@ fn handleGuard(ctx: flash.Context) (error{ AllocationError, AmbiguousCommand, As
     defer config.deinit();
 
     // Get staged files
-    const diff_result = std.process.Child.run(.{
-        .allocator = allocator,
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const diff_result = std.process.run(allocator, io, .{
         .argv = &[_][]const u8{ "git", "diff", "--cached", "--name-only" },
     }) catch |err| {
         std.debug.print("  ❌ Failed to get staged files: {}\n", .{err});
@@ -928,7 +920,7 @@ fn handleGuard(ctx: flash.Context) (error{ AllocationError, AmbiguousCommand, As
     defer allocator.free(diff_result.stdout);
     defer allocator.free(diff_result.stderr);
 
-    if (diff_result.term != .Exited or diff_result.term.Exited != 0) {
+    if (diff_result.term != .exited or diff_result.term.exited != 0) {
         std.debug.print("  ❌ Failed to get staged files\n", .{});
         return;
     }
@@ -977,8 +969,7 @@ fn handleGuard(ctx: flash.Context) (error{ AllocationError, AmbiguousCommand, As
         , .{file});
         defer allocator.free(show_cmd);
 
-        const show_result = std.process.Child.run(.{
-            .allocator = allocator,
+        const show_result = std.process.run(allocator, io, .{
             .argv = &[_][]const u8{ "sh", "-c", show_cmd },
         }) catch |err| {
             std.debug.print("      ❌ Failed to read file: {}\n", .{err});
@@ -1091,8 +1082,8 @@ fn handleReview(ctx: flash.Context) (error{ AllocationError, AmbiguousCommand, A
     }
 
     // Get current changes (staged + unstaged)
-    const diff_result = std.process.Child.run(.{
-        .allocator = allocator,
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const diff_result = std.process.run(allocator, io, .{
         .argv = &[_][]const u8{ "git", "diff", "HEAD" },
     }) catch |err| {
         std.debug.print("  ❌ Failed to get diff: {}\n", .{err});
@@ -1101,7 +1092,7 @@ fn handleReview(ctx: flash.Context) (error{ AllocationError, AmbiguousCommand, A
     defer allocator.free(diff_result.stdout);
     defer allocator.free(diff_result.stderr);
 
-    if (diff_result.term != .Exited or diff_result.term.Exited != 0) {
+    if (diff_result.term != .exited or diff_result.term.exited != 0) {
         std.debug.print("  ❌ Failed to get diff\n", .{});
         return;
     }
@@ -1217,8 +1208,8 @@ fn handleSync(ctx: flash.Context) (error{ AllocationError, AmbiguousCommand, Asy
     // Check git status
     std.debug.print("  📊 Checking repository status...\n", .{});
 
-    const status_result = std.process.Child.run(.{
-        .allocator = allocator,
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const status_result = std.process.run(allocator, io, .{
         .argv = &[_][]const u8{ "git", "status", "--porcelain" },
     }) catch |err| {
         std.debug.print("  ❌ Failed to check git status: {}\n", .{err});
@@ -1227,7 +1218,7 @@ fn handleSync(ctx: flash.Context) (error{ AllocationError, AmbiguousCommand, Asy
     defer allocator.free(status_result.stdout);
     defer allocator.free(status_result.stderr);
 
-    if (status_result.term != .Exited or status_result.term.Exited != 0) {
+    if (status_result.term != .exited or status_result.term.exited != 0) {
         std.debug.print("  ❌ Failed to get git status\n", .{});
         return;
     }
@@ -1240,8 +1231,7 @@ fn handleSync(ctx: flash.Context) (error{ AllocationError, AmbiguousCommand, Asy
         std.debug.print("    Stashing changes for safe sync...\n", .{});
 
         // Stash changes
-        const stash_result = std.process.Child.run(.{
-            .allocator = allocator,
+        const stash_result = std.process.run(allocator, io, .{
             .argv = &[_][]const u8{ "git", "stash", "push", "-m", "zap sync auto-stash" },
         }) catch |err| {
             std.debug.print("  ❌ Failed to stash changes: {}\n", .{err});
@@ -1250,7 +1240,7 @@ fn handleSync(ctx: flash.Context) (error{ AllocationError, AmbiguousCommand, Asy
         defer allocator.free(stash_result.stdout);
         defer allocator.free(stash_result.stderr);
 
-        if (stash_result.term != .Exited or stash_result.term.Exited != 0) {
+        if (stash_result.term != .exited or stash_result.term.exited != 0) {
             std.debug.print("  ❌ Failed to stash changes: {s}\n", .{stash_result.stderr});
             return;
         }
@@ -1261,8 +1251,7 @@ fn handleSync(ctx: flash.Context) (error{ AllocationError, AmbiguousCommand, Asy
     }
 
     // Check if we're on a branch
-    const branch_result = std.process.Child.run(.{
-        .allocator = allocator,
+    const branch_result = std.process.run(allocator, io, .{
         .argv = &[_][]const u8{ "git", "branch", "--show-current" },
     }) catch |err| {
         std.debug.print("  ❌ Failed to get current branch: {}\n", .{err});
@@ -1271,7 +1260,7 @@ fn handleSync(ctx: flash.Context) (error{ AllocationError, AmbiguousCommand, Asy
     defer allocator.free(branch_result.stdout);
     defer allocator.free(branch_result.stderr);
 
-    if (branch_result.term != .Exited or branch_result.term.Exited != 0) {
+    if (branch_result.term != .exited or branch_result.term.exited != 0) {
         std.debug.print("  ❌ Not on a branch\n", .{});
         return;
     }
@@ -1280,8 +1269,7 @@ fn handleSync(ctx: flash.Context) (error{ AllocationError, AmbiguousCommand, Asy
     std.debug.print("  🌿 On branch: {s}\n", .{branch});
 
     // Check if remote exists
-    const remote_result = std.process.Child.run(.{
-        .allocator = allocator,
+    const remote_result = std.process.run(allocator, io, .{
         .argv = &[_][]const u8{ "git", "remote", "get-url", "origin" },
     }) catch |err| {
         std.debug.print("  ❌ Failed to check remote: {}\n", .{err});
@@ -1290,7 +1278,7 @@ fn handleSync(ctx: flash.Context) (error{ AllocationError, AmbiguousCommand, Asy
     defer allocator.free(remote_result.stdout);
     defer allocator.free(remote_result.stderr);
 
-    const has_remote = remote_result.term == .Exited and remote_result.term.Exited == 0;
+    const has_remote = remote_result.term == .exited and remote_result.term.exited == 0;
 
     if (!has_remote) {
         std.debug.print("  ℹ️  No remote configured\n", .{});
@@ -1299,8 +1287,7 @@ fn handleSync(ctx: flash.Context) (error{ AllocationError, AmbiguousCommand, Asy
         // Restore stashed changes if any
         if (has_changes) {
             std.debug.print("  🔄 Restoring stashed changes...\n", .{});
-            const stash_pop_result = std.process.Child.run(.{
-                .allocator = allocator,
+            const stash_pop_result = std.process.run(allocator, io, .{
                 .argv = &[_][]const u8{ "git", "stash", "pop" },
             }) catch |err| {
                 std.debug.print("  ❌ Failed to restore changes: {}\n", .{err});
@@ -1319,8 +1306,7 @@ fn handleSync(ctx: flash.Context) (error{ AllocationError, AmbiguousCommand, Asy
     // Fetch latest changes
     std.debug.print("  📥 Fetching latest changes...\n", .{});
 
-    const fetch_result = std.process.Child.run(.{
-        .allocator = allocator,
+    const fetch_result = std.process.run(allocator, io, .{
         .argv = &[_][]const u8{ "git", "fetch", "origin" },
     }) catch |err| {
         std.debug.print("  ❌ Failed to fetch: {}\n", .{err});
@@ -1329,7 +1315,7 @@ fn handleSync(ctx: flash.Context) (error{ AllocationError, AmbiguousCommand, Asy
     defer allocator.free(fetch_result.stdout);
     defer allocator.free(fetch_result.stderr);
 
-    if (fetch_result.term != .Exited or fetch_result.term.Exited != 0) {
+    if (fetch_result.term != .exited or fetch_result.term.exited != 0) {
         std.debug.print("  ❌ Failed to fetch: {s}\n", .{fetch_result.stderr});
         return;
     }
@@ -1337,8 +1323,7 @@ fn handleSync(ctx: flash.Context) (error{ AllocationError, AmbiguousCommand, Asy
     std.debug.print("  ✅ Fetch completed\n", .{});
 
     // Check if we're ahead/behind
-    const ahead_behind_result = std.process.Child.run(.{
-        .allocator = allocator,
+    const ahead_behind_result = std.process.run(allocator, io, .{
         .argv = &[_][]const u8{ "git", "rev-list", "--count", "--left-right", "HEAD...origin/main" },
     }) catch |err| {
         std.debug.print("  ❌ Failed to check ahead/behind: {}\n", .{err});
@@ -1351,7 +1336,7 @@ fn handleSync(ctx: flash.Context) (error{ AllocationError, AmbiguousCommand, Asy
     var ahead_count: usize = 0;
     var behind_count: usize = 0;
 
-    if (ahead_behind_result.term == .Exited and ahead_behind_result.term.Exited == 0) {
+    if (ahead_behind_result.term == .exited and ahead_behind_result.term.exited == 0) {
         var parts = std.mem.splitScalar(u8, ahead_behind, '\t');
         if (parts.next()) |ahead| {
             ahead_count = std.fmt.parseInt(usize, ahead, 10) catch 0;
@@ -1367,8 +1352,7 @@ fn handleSync(ctx: flash.Context) (error{ AllocationError, AmbiguousCommand, Asy
     if (behind_count > 0) {
         std.debug.print("  ⬇️  Pulling {d} commits...\n", .{behind_count});
 
-        const pull_result = std.process.Child.run(.{
-            .allocator = allocator,
+        const pull_result = std.process.run(allocator, io, .{
             .argv = &[_][]const u8{ "git", "pull", "--ff-only", "origin", branch },
         }) catch |err| {
             std.debug.print("  ❌ Failed to pull: {}\n", .{err});
@@ -1377,7 +1361,7 @@ fn handleSync(ctx: flash.Context) (error{ AllocationError, AmbiguousCommand, Asy
         defer allocator.free(pull_result.stdout);
         defer allocator.free(pull_result.stderr);
 
-        if (pull_result.term != .Exited or pull_result.term.Exited != 0) {
+        if (pull_result.term != .exited or pull_result.term.exited != 0) {
             std.debug.print("  ❌ Failed to pull: {s}\n", .{pull_result.stderr});
             return;
         }
@@ -1391,8 +1375,7 @@ fn handleSync(ctx: flash.Context) (error{ AllocationError, AmbiguousCommand, Asy
     if (ahead_count > 0) {
         std.debug.print("  ⬆️  Pushing {d} commits...\n", .{ahead_count});
 
-        const push_result = std.process.Child.run(.{
-            .allocator = allocator,
+        const push_result = std.process.run(allocator, io, .{
             .argv = &[_][]const u8{ "git", "push", "origin", branch },
         }) catch |err| {
             std.debug.print("  ❌ Failed to push: {}\n", .{err});
@@ -1401,7 +1384,7 @@ fn handleSync(ctx: flash.Context) (error{ AllocationError, AmbiguousCommand, Asy
         defer allocator.free(push_result.stdout);
         defer allocator.free(push_result.stderr);
 
-        if (push_result.term != .Exited or push_result.term.Exited != 0) {
+        if (push_result.term != .exited or push_result.term.exited != 0) {
             std.debug.print("  ❌ Failed to push: {s}\n", .{push_result.stderr});
             return;
         }
@@ -1415,8 +1398,7 @@ fn handleSync(ctx: flash.Context) (error{ AllocationError, AmbiguousCommand, Asy
     if (has_changes) {
         std.debug.print("  🔄 Restoring stashed changes...\n", .{});
 
-        const stash_pop_result = std.process.Child.run(.{
-            .allocator = allocator,
+        const stash_pop_result = std.process.run(allocator, io, .{
             .argv = &[_][]const u8{ "git", "stash", "pop" },
         }) catch |err| {
             std.debug.print("  ❌ Failed to restore changes: {}\n", .{err});
@@ -1425,7 +1407,7 @@ fn handleSync(ctx: flash.Context) (error{ AllocationError, AmbiguousCommand, Asy
         defer allocator.free(stash_pop_result.stdout);
         defer allocator.free(stash_pop_result.stderr);
 
-        if (stash_pop_result.term != .Exited or stash_pop_result.term.Exited != 0) {
+        if (stash_pop_result.term != .exited or stash_pop_result.term.exited != 0) {
             std.debug.print("  ⚠️  Failed to restore changes: {s}\n", .{stash_pop_result.stderr});
             std.debug.print("    You may need to manually restore: git stash pop\n", .{});
         } else {

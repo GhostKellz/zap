@@ -239,6 +239,7 @@ pub const OllamaClient = struct {
         defer self.allocator.free(json_payload);
 
         // Create temporary file for payload
+        const io = std.Io.Threaded.global_single_threaded.io();
         const ts = std.posix.clock_gettime(std.posix.CLOCK.REALTIME) catch |err| blk: {
             std.log.warn("Failed to get timestamp: {}", .{err});
             break :blk std.posix.timespec{ .sec = 0, .nsec = 0 };
@@ -246,10 +247,10 @@ pub const OllamaClient = struct {
         const temp_file = try std.fmt.allocPrint(self.allocator, "/tmp/zap_ollama_payload_{d}.json", .{ts.sec});
         defer self.allocator.free(temp_file);
 
-        var tmp_file = try std.fs.createFileAbsolute(temp_file, .{ .truncate = true });
-        try tmp_file.writeAll(json_payload);
-        tmp_file.close();
-        defer std.fs.deleteFileAbsolute(temp_file) catch {};
+        var tmp_file = try std.Io.Dir.createFileAbsolute(io, temp_file, .{});
+        try tmp_file.writeStreamingAll(io, json_payload);
+        tmp_file.close(io);
+        defer std.Io.Dir.deleteFileAbsolute(io, temp_file) catch {};
 
         // Use curl with temp file
         const curl_cmd = try std.fmt.allocPrint(self.allocator,
@@ -257,15 +258,14 @@ pub const OllamaClient = struct {
         , .{ self.config.host, temp_file });
         defer self.allocator.free(curl_cmd);
 
-        const result = try std.process.Child.run(.{
-            .allocator = self.allocator,
+        const result = try std.process.run(self.allocator, io, .{
             .argv = &[_][]const u8{ "sh", "-c", curl_cmd },
         });
         defer self.allocator.free(result.stdout);
         defer self.allocator.free(result.stderr);
 
-        if (result.term != .Exited or result.term.Exited != 0) {
-            std.debug.print("Ollama request failed with exit code {}: {s}\n", .{result.term.Exited, result.stderr});
+        if (result.term != .exited or result.term.exited != 0) {
+            std.debug.print("Ollama request failed with exit code {}: {s}\n", .{result.term.exited, result.stderr});
             return error.OllamaRequestFailed;
         }
 
@@ -308,14 +308,14 @@ pub const OllamaClient = struct {
         , .{self.config.host});
         defer self.allocator.free(curl_cmd);
 
-        const result = try std.process.Child.run(.{
-            .allocator = self.allocator,
+        const io = std.Io.Threaded.global_single_threaded.io();
+        const result = try std.process.run(self.allocator, io, .{
             .argv = &[_][]const u8{ "sh", "-c", curl_cmd },
         });
         defer self.allocator.free(result.stdout);
         defer self.allocator.free(result.stderr);
 
-        return result.term == .Exited and result.term.Exited == 0;
+        return result.term == .exited and result.term.exited == 0;
     }
 
     /// List available models
@@ -325,14 +325,14 @@ pub const OllamaClient = struct {
         , .{self.config.host});
         defer self.allocator.free(curl_cmd);
 
-        const result = try std.process.Child.run(.{
-            .allocator = self.allocator,
+        const io = std.Io.Threaded.global_single_threaded.io();
+        const result = try std.process.run(self.allocator, io, .{
             .argv = &[_][]const u8{ "sh", "-c", curl_cmd },
         });
         defer self.allocator.free(result.stdout);
         defer self.allocator.free(result.stderr);
 
-        if (result.term != .Exited or result.term.Exited != 0) {
+        if (result.term != .exited or result.term.exited != 0) {
             return error.OllamaRequestFailed;
         }
 
