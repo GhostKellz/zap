@@ -46,13 +46,12 @@
         },
         .phantom = .{
             .url = "https://github.com/ghostkellz/phantom/archive/main.tar.gz",
-            .hash = "phantom-0.8.3-E0eWBPFzHgCXocjoZxtPKeK6V5B3L2DxgBlPmvnHxlYP",
+            .hash = "phantom-0.8.3-E0eWBPFzHgCg5D5en6bbutPLfUYsE8thrvL_ruJ3Zxuh",
         },
         .rune = .{
             .url = "https://github.com/ghostkellz/rune/archive/main.tar.gz",
             .hash = "rune-0.1.1-MvDOXrjhBgCB2YVCMyCYQyXNGcoLbmHngSpvU-bjY1tU",
         },
-       
     },
     .paths = .{
         "build.zig",
